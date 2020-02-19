@@ -1,0 +1,1 @@
+python3 frame_potential.py /path/to/quantum-irreversibility/example_test/example_infile.txt /path/to/quantum-irreversibility/example_test/example_outfile.txt

@@ -16,39 +16,22 @@ pauli_Y = np.array([[0,-1j],
 phase_gate = lambda phi : np.array([[1, 0],
                                     [0, np.exp(1j*phi)]])
 
-times = {} # Add logging
-def timeit(label=None):
-    def wrap(method):
-        def timed_f(*args, **kwargs):
-            ts = time.time()
-            result = method(*args, **kwargs)
-            te = time.time()
+gate_matrices= {"H": 1.0 / 2 ** 0.5 * np.array([[1, 1],
+                                                [1, -1]]),
+                "T": phase_gate(np.pi / 4),
+                "S": phase_gate(np.pi / 2),
+                "CNOT": np.tensordot(P0, np.eye(2), axes=0) +
+                        np.tensordot(P1, pauli_X, axes=0),
+                "P0": P0,
+                "P1": P1,
+                "X": pauli_X,
+                "Y": pauli_Y,
+                "NOT": pauli_X}
 
-            if label:
-                times[label] = times.get(label, 0) + te-ts
-            else:
-                print(te-ts)
+clifford_set = {k:v for k,v in gate_matrices.items() if k in ["H", "S", "CNOT"]}
+universal_set = {k:v for k,v in gate_matrices.items() if k in ["H", "T", "CNOT"]}
 
-            return result
-        return timed_f
-    return wrap
-
-
-# consider func_tools
-def tensorprod(head, *rest):
+def multi_kron(head, *rest):
     if not rest:
         return head
-    return np.tensordot(head, tensorprod(*rest), axes=0)
-
-
-def rand_states(N):
-    i = 0
-    while i < N:
-        theta = np.pi * np.random.uniform()
-        phi = 2 * np.pi * np.random.uniform()
-        yield np.cos(theta/2)*zero + np.sin(theta/2) * np.exp(1j*phi)*one
-        i += 1
-
-def inner_product(state1, state2):
-    N = len(state1.shape)
-    return np.tensordot(state1.conjugate(), state2, axes=(list(range(N)), list(range(N))))
+    return np.kron(head, multi_kron(rest))

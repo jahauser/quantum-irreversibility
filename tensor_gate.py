@@ -1,73 +1,39 @@
-# -*- coding: utf-8 -*-
-
 import numpy as np
-import tools
-import sys
-import time
+import gate
 
-phase_gate = lambda phi : np.array([[1, 0],
-                                    [0, np.exp(1j*phi)]])
+class TensorGate(gate.Gate):
+    '''Implements Gate using numpy tensors under the hood.'''
 
-gate_matrices= {"H": 1.0 / 2 ** 0.5 * np.array([[1, 1],
-                                                [1, -1]]),
-                "T": tools.phase_gate(np.pi / 4),
-                "S": tools.phase_gate(np.pi / 2),
-                "CNOT": np.tensordot(tools.P0, np.eye(2), axes=0) +
-                        np.tensordot(tools.P1, tools.pauli_X, axes=0),
-                "P0": tools.P0,
-                "P1": tools.P1,
-                "X": tools.pauli_X,
-                "Y": tools.pauli_Y,
-                "NOT": np.array([[0, 1],
-                                 [1, 0]])}
+    def __init__(self, gate_matrix, sites, N, name=None):
+        if any([x >= N for x in sites]):
+            raise ValueError('Acts on site outside qubit range')
+        self.dim = int(len(gate_matrix.shape)/2)
+        gate.Gate.__init__(self, gate_matrix, sites, N, name)
 
+    def compose_with(self, other):
+        '''Uses np.tensordot to multiply with another tensor.
 
+        This multiplication process involves summing over the correct indices to match how matrix
+        multiplication should work. Furthermore, the process requires reordering the tensor
+        components afterwards so the tensor continues to act on the proper sites.'''
 
-def rand_gates(gate_set, N, num_gates):
-    k = 0
-    while k < num_gates:
-        gate = np.random.choice(gate_set)
-        matrix = gate_matrices[gate]
-        dim = int(len(matrix.shape) / 2)
-        yield TensorGate(matrix, list(np.random.choice(np.arange(N), size=dim, replace=False)), dim=dim, name=gate)
-        k += 1
-
-
-def gate(name, bits):
-    return TensorGate(gate_matrices[name], bits, name=name)
-
-
-
-class TensorGate:
-    def __init__(self, matrix, bits, dim=None, name=None):
-        self.matrix = matrix
-        self.bits = bits
-        if not dim:
-            self.dim = int(len(self.matrix.shape)/2)
-        else:
-            self.dim = dim
-
-        self.name = name
-
-    def __mul__(self, other):
         sums1 = []
         sums2 = []
-        bits1 = self.bits.copy()
-        bits2 = other.bits.copy()
+        sites1 = self.sites.copy()
+        sites2 = other.sites.copy()
 
         index = {}
 
-        for i, bit in enumerate(self.bits):
-            if bit in other.bits:
+        for i, site in enumerate(self.sites):
+            if site in other.sites:
                 sums1.append(2*i+1)
-                sums2.append(2*other.bits.index(bit))
+                sums2.append(2*other.sites.index(site))
 
-                index[2*i+1] = 2*other.bits.index(bit)+1
+                index[2*i+1] = 2*other.sites.index(site)+1
 
-                #bits1.remove(bit)
-                bits2.remove(bit)
-        td = np.tensordot(self.matrix, other.matrix, axes=(sums1, sums2))
-        new_bits = bits1 + bits2
+                sites2.remove(site)
+        td = np.tensordot(self.representation, other.representation, axes=(sums1, sums2))
+        new_sites = sites1 + sites2
 
         base = list(range(len(td.shape)))
         base.reverse()
@@ -81,115 +47,24 @@ class TensorGate:
             else:
                 transposition.append(base.pop())
         td = np.transpose(td,transposition)
-        return TensorGate(td, new_bits)
-
-    #@profile
-    def apply_to(self, state):
-        my_comps = [2*k+1 for k in range(self.dim)]
-
-        N = len(state.shape)
-        transposition = []
-        index = {bit: num for (num, bit) in enumerate(self.bits)}
-        base = list(range(len(self.bits),N))
-        for i in range(N):
-            contained = i in self.bits
-            if contained:
-                transposition.append(index[i])
-            else:
-                transposition.append(base.pop(0))
-
-        td = np.tensordot(self.matrix, state, axes=(my_comps, self.bits))
-        return np.transpose(td,transposition)
+        return TensorGate(td, new_sites, self.N)
 
     def dagger(self):
-        if self.name[-1] == '†':
-            new_name = self.name[:-1]
-        else:
-            new_name = self.name + '†'
+        '''Returns the Hermitian conjugate of a gate and changes its name appropriately.'''
+
+        if self.name:
+            if self.name[-1] == '†':
+                new_name = self.name[:-1]
+            else:
+                new_name = self.name + '†'
         transposition = []
         for i in range(self.dim):
             transposition.extend([2*i+1, 2*i])
-        return TensorGate(np.transpose(self.matrix.conjugate(), transposition), self.bits, dim=self.dim, name=new_name)
+        return TensorGate(np.transpose(self.representation.conjugate(), transposition), self.sites,
+                self.N, name=new_name)
 
-    def __str__(self):
-        if self.name:
-            return self.name + str(self.bits)
-        return self.matrix.__str__()
+    def trace(self):
+        '''Uses np.einsum to take the trace of the gate's tensor.'''
 
-    def __repr__(self):
-        if self.name:
-            return self.name + str(self.bits)
-        return self.matrix.__repr__()
-
-
-class GateSequence(list):
-    def __init__(self, *args):
-        list.__init__(self, *args)
-
-    def apply_to(self, state):
-        for gate in self:
-            state = gate.apply_to(state)
-        return state
-
-    def apply_to2(self, state):
-        if not self:
-            return state
-        return self[1:].apply_to(self[0].apply_to(state))
-
-    def dagger(self):
-        return GateSequence(gate.dagger() for gate in self[::-1])
-
-    def __getitem__(self, *args):
-        if isinstance(args[0], int):
-            return list.__getitem__(self, *args)
-        return GateSequence(list.__getitem__(self, *args))
-
-def product(gates):
-    if type(gates[0]) == list:
-        return product([product(sub_gates) for sub_gates in gates])
-    prod = gates[0]
-    for sub_gate in gates[1:]:
-        prod = prod * sub_gate
-    return prod
-
-def collapse_aux(gates, i):
-    M = len(gates)
-    #for j in range(i+1, M):
-
-
-def new_rand_gates(gate_set, N, num_gates):
-    bit_list = []
-    #for n in range(num_gates):
-
-    k = 0
-    while k < num_gates:
-        gate = np.random.choice(gate_set)
-        matrix = gate_matrices[gate]
-        dim = int(len(matrix.shape) / 2)
-        yield TensorGate(matrix, list(np.random.choice(np.arange(N), size=dim, replace=False)), dim=dim, name=gate)
-        k += 1
-
-# pick gate
-
-'''
-gates1 = [gate("CNOT",[i,i+1]) for i in range(12)]+ [gate("CNOT",[i,i+1]) for i in range(12)][:-1]
-gates2 = [[gate("CNOT",[i,i+1]) for i in range(12)],[gate("CNOT",[i,i+1]) for i in range(12)]]
-
-N = 13
-p = product([gate("CNOT",[i,i+1]) for i in range(N)])
-t1 = time.time()
-p*gate("H",[N,N])
-t2 = time.time()
-
-print(t2-t1)
-
-t1 = time.time()
-for i in range(10*400):
-    gate = TensorGate(np.random.rand(16).reshape(2,2,2,2), [1,2])
-    for j in range(2*10*400):
-        new_gate = TensorGate(np.random.rand(16).reshape(2,2,2,2), [1,2])
-        gate = gate * new_gate
-t2 = time.time()
-
-print(t2-t1)
-'''
+        return np.einsum(self.representation,
+                [n for n in range(len(self.representation.shape) // 2) for i in range(2)])
