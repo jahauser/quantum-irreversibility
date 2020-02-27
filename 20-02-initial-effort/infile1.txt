@@ -1,0 +1,6 @@
+#format: t, K, N, circuit_scale, architecture
+3, 100, 8, 1.0, all clifford
+3, 100, 8, 1.0, all clifford
+3, 100, 8, 1.0, all clifford
+3, 100, 8, 1.0, all clifford
+3, 100, 8, 1.0, all clifford
