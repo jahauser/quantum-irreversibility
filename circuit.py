@@ -1,4 +1,5 @@
 import numpy as np
+import re
 
 class Circuit(list):
     '''List wrapper for quantum gates.
@@ -23,6 +24,27 @@ class Circuit(list):
         if isinstance(args[0], int):
             return list.__getitem__(self, *args)
         return Circuit(list.__getitem__(self, *args))
+
+    def product(self):
+        prod = self[0]
+        for gate in self[1:]:
+            prod = prod * gate
+        return prod
+    
+    @staticmethod
+    def from_string(gate_constructor, gate_map, N, circuit_string):
+        p = re.compile("([A-Z]*\[\d(?:, \d)*\])")
+        gate_strings = p.findall(circuit_string)
+
+        gates = []
+
+        for gate in gate_strings:
+            name = gate[:gate.find('[')]
+            sites = gate[gate.find('['):]
+            matrix = gate_map[name]
+            gates.append(gate_constructor(matrix, [int(site) for site in
+                sites.strip('][').split(', ')], N, name=name))
+        return Circuit(gates)
 
     @staticmethod
     def rand_circuit(gate_constructor, gate_map, N, num_gates):

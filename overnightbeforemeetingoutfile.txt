@@ -1,0 +1,2 @@
+t, K, N, circuit_scale, architecture, Phi
+3, 200, 8, 1.0, all clifford, 1407374883559.2058, 298.36125445365906

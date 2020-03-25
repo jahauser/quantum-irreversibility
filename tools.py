@@ -34,4 +34,4 @@ universal_set = {k:v for k,v in gate_matrices.items() if k in ["H", "T", "CNOT"]
 def multi_kron(head, *rest):
     if not rest:
         return head
-    return np.kron(head, multi_kron(rest))
+    return np.kron(head, multi_kron(*rest))

@@ -1,4 +1,5 @@
 import numpy as np
+import sparse
 import gate
 
 class TensorGate(gate.Gate):
@@ -32,7 +33,7 @@ class TensorGate(gate.Gate):
                 index[2*i+1] = 2*other.sites.index(site)+1
 
                 sites2.remove(site)
-        td = np.tensordot(self.representation, other.representation, axes=(sums1, sums2))
+        td = sparse.tensordot(self.representation, other.representation, axes=(sums1, sums2))
         new_sites = sites1 + sites2
 
         base = list(range(len(td.shape)))
@@ -46,12 +47,12 @@ class TensorGate(gate.Gate):
                 transposition.append(coord)
             else:
                 transposition.append(base.pop())
-        td = np.transpose(td,transposition)
+        td = td.transpose(transposition)
         return TensorGate(td, new_sites, self.N)
 
     def dagger(self):
         '''Returns the Hermitian conjugate of a gate and changes its name appropriately.'''
-        new_name = None
+
         if self.name:
             if self.name[-1] == '†':
                 new_name = self.name[:-1]
@@ -60,14 +61,8 @@ class TensorGate(gate.Gate):
         transposition = []
         for i in range(self.dim):
             transposition.extend([2*i+1, 2*i])
-        return TensorGate(np.transpose(self.representation.conjugate(), transposition), self.sites,
+        return TensorGate(self.representation.conjugate().transpose(transposition), self.sites,
                 self.N, name=new_name)
-
-    def trace(self):
-        '''Uses np.einsum to take the trace of the gate's tensor.'''
-
-        return np.einsum(self.representation,
-                [n for n in range(len(self.representation.shape) // 2) for i in range(2)])
 
 
     def trace2(self, other):
@@ -82,8 +77,8 @@ class TensorGate(gate.Gate):
 
         for i, site in enumerate(self.sites):
             if site in other.sites:
-                sums1.extend([2*i+1, 2*i])
-                sums2.extend([2*other.sites.index(site), 2*other.sites.index(site) + 1])
+                sums1.extend(2*i+1, 2*i)
+                sums2.extend(2*other.sites.index(site), 2*other.sites.index(site) + 1)
 
                 index[2*i+1] = 2*other.sites.index(site)+1
 
@@ -93,7 +88,13 @@ class TensorGate(gate.Gate):
 
         unsummed2 = [site for site in other.sites if site not in sums2]
 
-        td = np.tensordot(self.representation, other.representation, axes=(sums1, sums2))
-        return np.einsum(td,
-                [n for n in range(len(td.shape) // 2) for i in range(2)])
+        td = sparse.tensordot(self.representation, other.representation, axes=(sums1, sums2))
+        dense_td = td.todense()
+        return np.einsum(dense_td,
+                [n for n in range(len(dense_td.shape) // 2) for i in range(2)])
+    
+    def trace(self):
+        '''Uses np.einsum to take the trace of the gate's tensor.'''
 
+        return np.einsum(self.representation,
+                [n for n in range(len(self.representation.shape) // 2) for i in range(2)])

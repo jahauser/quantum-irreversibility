@@ -7,3 +7,11 @@ t, K, N, circuit_scale, architecture, Phi
 4, 20, 7, 1.0, all clifford, 36.59999999999924
 3, 20, 7, 1.0, all universal, 20.07642764228926
 4, 20, 7, 1.0, all universal, 20.31630539694043
+3, 20, 7, 1.0, all clifford, 7.8374999999998805
+3, 20, 5, 1.0, all clifford, 17.46499999999982
+3, 20, 5, 1.0, all clifford, 16.42749999999985
+3, 20, 5, 1.0, all clifford, 664.7849999999961
+3, 20, 7, 1.0, all clifford, 8.002499999999877
+4, 20, 7, 1.0, all clifford, 23.829999999999494
+3, 20, 7, 1.0, all universal, 664.2307537808072
+4, 20, 7, 1.0, all universal, 315.8304583102311

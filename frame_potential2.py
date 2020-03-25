@@ -1,6 +1,8 @@
 import numpy as np
 import sys, argparse
 import circuit, tools, tensor_gate
+import time
+import functools
 
 from multiprocessing import Pool
 
@@ -35,6 +37,13 @@ def product(circuit):
         prod = prod*gate
     return prod
 
+def partial_phi_pair(products, daggers, t, pair):
+    (a,b) = pair
+    trace = products[a].trace2(daggers[b])
+    partial_phi = np.abs(trace)**(2*t)
+    return partial_phi
+        
+
 def frame_potential(t, K, N, circuit_scale, circuit_maker):
     '''Calculate the t^th frame potential for a set of circuits.
 
@@ -44,33 +53,26 @@ def frame_potential(t, K, N, circuit_scale, circuit_maker):
 
     # First, we generate a set of circuits
     circuits = []
-    
+
     for k in range(K):
         circuit = circuit_maker(N, circuit_scale)
-        circuit = product(circuit)
         circuits.append(circuit)
+    
+    with Pool() as p:
+        products = p.map(product, circuits)
+    print("done products")
+    with Pool() as p:
+        daggers = p.map(tensor_gate.TensorGate.dagger, products)
 
+    print("done daggers")
     # Next, we initialize our frame potential Phi, which is built up over the following loop
     Phi = 0.0
 
-    for circuit in circuits:
-        partial_Phi = sum(map(trace_with(circuit.dagger()), circuits))
-    
-    # Loop over all pairs of circuits
-    for i in range(K):
-        for j in range(K):
-            # Prepare the circuit U V^\dag
-            circuit = circuits[i]+circuits[j].dagger()
-            
-            # Multiple as if circuit[0] is furthest to the right
-            prod = circuit[0]
-            for gate in circuit[1:]:
-                prod = gate.compose_with(prod)
-            
-            trace = prod.trace()
-            Phi += np.abs(trace)**(2*t)
+    pairs = [(i,j) for i in range(K) for j in range(K)]
+    with Pool() as p:
+        partial_phis = p.map(functools.partial(partial_phi_pair, products, daggers, t), pairs)
 
-    Phi = Phi / (K**2)
+    Phi = sum(partial_phis) / (K**2)
     return Phi
 
 def parse_input(infile_name):
@@ -79,8 +81,9 @@ def parse_input(infile_name):
     strings = []
     tests = []
     with open(infile_name, 'r') as infile:
-        infile.readline()
         for line in infile:
+            if line[0] == '#':
+                continue
             line = line.rstrip()
             params = line.split(', ')
             if params[4] == 'all clifford':
@@ -104,11 +107,16 @@ def main(args):
             outfile.write('t, K, N, circuit_scale, architecture, Phi\n')
 
     for (string, test) in zip(strings, tests):
+        t0 = time.time()
         phi = frame_potential(*test)
+        t1 = time.time()
+        #print(phi)
         with open(args.outfile, 'a') as outfile:
-            outfile.write(string + f', {phi}\n')
+            print(args.outfile)
+            outfile.write(string + f', {phi}, {t1-t0}\n')
 
 if __name__ == '__main__':
+    print("foo")
     args = get_args()
     main(args)
 

@@ -1,0 +1,16 @@
+#format: t, K, N, circuit_scale, architecture
+3, 25, 8, 1.0, all universal
+3, 25, 8, 1.0, all universal
+3, 25, 8, 1.0, all universal
+3, 25, 8, 1.0, all universal
+3, 25, 8, 1.0, all universal
+3, 50, 8, 1.0, all universal
+3, 50, 8, 1.0, all universal
+3, 50, 8, 1.0, all universal
+3, 50, 8, 1.0, all universal
+3, 50, 8, 1.0, all universal
+3, 100, 8, 1.0, all universal
+3, 100, 8, 1.0, all universal
+3, 100, 8, 1.0, all universal
+3, 100, 8, 1.0, all universal
+3, 100, 8, 1.0, all universal

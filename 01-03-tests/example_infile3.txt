@@ -1,0 +1,11 @@
+#format: t, K, N, circuit_scale, architecture
+3, 50, 8, 1.0, mixed .5
+3, 50, 8, 1.0, mixed .10
+3, 50, 8, 1.0, mixed .15
+3, 50, 8, 1.0, mixed .20
+3, 50, 8, 1.0, mixed .25
+3, 50, 8, 1.0, mixed .30
+3, 50, 8, 1.0, mixed .35
+3, 50, 8, 1.0, mixed .40
+3, 50, 8, 1.0, mixed .45
+3, 50, 8, 1.0, mixed .50

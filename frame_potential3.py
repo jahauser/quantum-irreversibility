@@ -1,9 +1,16 @@
 import numpy as np
 import sys, argparse
 import circuit, tools, tensor_gate, matrix_gate
-import time, random
+import time
+import functools
+
+from multiprocessing import Pool
 
 gate_constructor = tensor_gate.TensorGate
+#gate_constructor = matrix_gate.MatrixGate
+
+products = []
+daggers = []
 
 def get_args():
     '''Retrieve file name arguments.'''
@@ -13,8 +20,6 @@ def get_args():
     parser.add_argument("outfile", help="output file containing test results")
     parser.add_argument("--new", action='store_true',
             help="flag to indicate whether outfile is new and should have header added")
-    parser.add_argument("--time", action='store_true',
-            help="flag to indicate whether runtimes for each test should be recorded")
     args = parser.parse_args()
     return args
 
@@ -30,17 +35,22 @@ def all_universal_maker(N, circuit_scale):
     num_gates = int(circuit_scale*(N**2))
     return circuit.Circuit.rand_circuit(gate_constructor, tools.universal_set, N, num_gates)
 
-def mixed_maker(T_percent):
-    def mixed_maker_helper(N, circuit_scale):
-        num_T = int(circuit_scale*(N**2)*T_percent)
-        num_gates = int(circuit_scale*(N**2)*(1-T_percent))
-        circ = circuit.Circuit.rand_circuit(gate_constructor, tools.clifford_set, N, num_gates)
-        circT = circuit.Circuit.rand_circuit(gate_constructor, {'T': tools.universal_set["T"]}, N, num_gates)
-        circ2 = circ+circT
-        random.shuffle(circ2)
-        return circuit.Circuit(circ2)
-    return mixed_maker_helper
-                
+def product(circuit):
+    prod = circuit[0]
+    for gate in circuit[1:]:
+        prod = prod*gate
+    return prod
+
+def partial_phi_pair(pair):
+    global products
+    global daggers
+
+    (a,b) = pair
+    prod = products[a] * daggers[b]
+    trace = prod.trace()
+    partial_phi = np.abs(trace)
+    return partial_phi
+        
 
 def frame_potential(t, K, N, circuit_scale, circuit_maker):
     '''Calculate the t^th frame potential for a set of circuits.
@@ -49,31 +59,60 @@ def frame_potential(t, K, N, circuit_scale, circuit_maker):
     A circuit_maker function is given corresponding to the desired circuit architecture, and a
     circuit_scale parameter provided to scale the size of the circuit produced by this function.'''
 
+    global products
+    global daggers
+
     # First, we generate a set of circuits
+    circuits = []
+
+    for k in range(K):
+        circuit = circuit_maker(N, circuit_scale)
+        circuits.append(circuit)
+    
+    with Pool() as p:
+        products = p.map(product, circuits)
+    print("done products")
+    with Pool() as p:
+        daggers = p.map(gate_constructor.dagger, products)
+
+    print("done daggers")
+    # Next, we initialize our frame potential Phi, which is built up over the following loop
+    Phi = 0.0
+
+    pairs = [(i,j) for i in range(K) for j in range(K)]
+    with Pool() as p:
+        partial_phis = p.map(partial_phi_pair, pairs)
+
+    Phi = sum((p**(2*t) for p in partial_phis)) / (K**2)
+    return Phi
+
+def frame_potential_linear(t, K, N, circuit_scale, circuit_maker):
     circuits = []
     for k in range(K):
         circuit = circuit_maker(N, circuit_scale)
         circuits.append(circuit)
-    print(circuits)
-    # Next, we initialize our frame potential Phi, which is built up over the following loop
-    Phi = 0.0
 
-    # Loop over all pairs of circuits
+    products = []
+    for circuit in circuits:
+        products.append(circuit.product())
+    print("done products")
+
+    daggers = []
+    for prod in products:
+        daggers.append(prod.dagger())
+    print("done daggers")
+
+    Phi = 0.0
     for i in range(K):
         for j in range(K):
-            # Prepare the circuit U V^\dag
-            circuit = circuits[i]+circuits[j].dagger()
-            #print("uhh")    
-            # Multiple as if circuit[0] is furthest to the right
-            prod = circuit[0]
-            for gate in circuit[1:]:
-                prod = gate.compose_with(prod)
-            
+            print(i,j)
+            prod = products[i] * daggers[j]
             trace = prod.trace()
-            Phi += np.abs(trace)**(2*t)
+            partial_phi = np.abs(trace)
+            Phi += partial_phi**(2*t)
 
-    Phi = Phi / (K**2)
-    return Phi
+    return Phi/(K**2)
+
 
 def parse_input(infile_name):
     '''Parses the input file into the desired test cases.'''
@@ -81,16 +120,15 @@ def parse_input(infile_name):
     strings = []
     tests = []
     with open(infile_name, 'r') as infile:
-        infile.readline()
         for line in infile:
+            if line[0] == '#':
+                continue
             line = line.rstrip()
             params = line.split(', ')
             if params[4] == 'all clifford':
                 circuit_maker = all_clifford_maker
             elif params[4] == 'all universal':
                 circuit_maker = all_universal_maker
-            elif params[4].split(" ")[0] == 'mixed':
-                circuit_maker = mixed_maker(float(params[4].split(" ")[1]))
             else:
                 raise ValueError('Unknown circuit architecture')
             strings.append(line)
@@ -113,12 +151,11 @@ def main(args):
         t1 = time.time()
         #print(phi)
         with open(args.outfile, 'a') as outfile:
-            if args.time:
-                outfile.write(string + f', {phi}, {t1-t0}\n')
-            else:
-                outfile.write(string + f', {phi}\n')
+            print(args.outfile)
+            outfile.write(string + f', {phi}, {t1-t0}\n')
 
 if __name__ == '__main__':
+    print("foo")
     args = get_args()
     main(args)
 

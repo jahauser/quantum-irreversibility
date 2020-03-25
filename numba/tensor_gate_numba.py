@@ -1,7 +1,11 @@
 import numpy as np
-import sparse
+from numba import jit, njit, jitclass
 import gate
 
+spec = [
+    ('representation', 
+
+@jitclass(spec)
 class TensorGate(gate.Gate):
     '''Implements Gate using numpy tensors under the hood.'''
 
@@ -10,7 +14,8 @@ class TensorGate(gate.Gate):
             raise ValueError('Acts on site outside qubit range')
         self.dim = int(len(gate_matrix.shape)/2)
         gate.Gate.__init__(self, gate_matrix, sites, N, name)
-
+	
+    @njit()
     def compose_with(self, other):
         '''Uses np.tensordot to multiply with another tensor.
 
@@ -33,7 +38,7 @@ class TensorGate(gate.Gate):
                 index[2*i+1] = 2*other.sites.index(site)+1
 
                 sites2.remove(site)
-        td = sparse.tensordot(self.representation, other.representation, axes=(sums1, sums2))
+        td = np.tensordot(self.representation, other.representation, axes=(sums1, sums2))
         new_sites = sites1 + sites2
 
         base = list(range(len(td.shape)))
@@ -47,9 +52,10 @@ class TensorGate(gate.Gate):
                 transposition.append(coord)
             else:
                 transposition.append(base.pop())
-        td = td.transpose(transposition)
+        td = np.transpose(td,transposition)
         return TensorGate(td, new_sites, self.N)
 
+    @njit()
     def dagger(self):
         '''Returns the Hermitian conjugate of a gate and changes its name appropriately.'''
 
@@ -61,9 +67,10 @@ class TensorGate(gate.Gate):
         transposition = []
         for i in range(self.dim):
             transposition.extend([2*i+1, 2*i])
-        return TensorGate(self.representation.conjugate().transpose(transposition), self.sites,
+        return TensorGate(np.transpose(self.representation.conjugate(), transposition), self.sites,
                 self.N, name=new_name)
-
+    
+    @njit()
     def trace(self):
         '''Uses np.einsum to take the trace of the gate's tensor.'''
 

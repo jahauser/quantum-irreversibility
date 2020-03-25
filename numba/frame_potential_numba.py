@@ -1,9 +1,9 @@
 import numpy as np
+from numba import jit, njit
 import sys, argparse
-import circuit, tools, tensor_gate, matrix_gate
-import time, random
+import circuit, tools, tensor_gate_numba
 
-gate_constructor = tensor_gate.TensorGate
+gate_constructor = tensor_gate_numba.TensorGate
 
 def get_args():
     '''Retrieve file name arguments.'''
@@ -13,8 +13,6 @@ def get_args():
     parser.add_argument("outfile", help="output file containing test results")
     parser.add_argument("--new", action='store_true',
             help="flag to indicate whether outfile is new and should have header added")
-    parser.add_argument("--time", action='store_true',
-            help="flag to indicate whether runtimes for each test should be recorded")
     args = parser.parse_args()
     return args
 
@@ -30,17 +28,27 @@ def all_universal_maker(N, circuit_scale):
     num_gates = int(circuit_scale*(N**2))
     return circuit.Circuit.rand_circuit(gate_constructor, tools.universal_set, N, num_gates)
 
-def mixed_maker(T_percent):
-    def mixed_maker_helper(N, circuit_scale):
-        num_T = int(circuit_scale*(N**2)*T_percent)
-        num_gates = int(circuit_scale*(N**2)*(1-T_percent))
-        circ = circuit.Circuit.rand_circuit(gate_constructor, tools.clifford_set, N, num_gates)
-        circT = circuit.Circuit.rand_circuit(gate_constructor, {'T': tools.universal_set["T"]}, N, num_gates)
-        circ2 = circ+circT
-        random.shuffle(circ2)
-        return circuit.Circuit(circ2)
-    return mixed_maker_helper
-                
+@njit()
+def calculation_loop(K, circuits):
+    # Next, we initialize our frame potential Phi, which is built up over the following loop
+    Phi = 0.0
+
+    # Loop over all pairs of circuits
+    for i in range(K):
+        for j in range(K):
+            # Prepare the circuit U V^\dag
+            circuit = circuits[i]+circuits[j].dagger()
+            
+            # Multiple as if circuit[0] is furthest to the right
+            prod = circuit[0]
+            for gate in circuit[1:]:
+                prod = gate.compose_with(prod)
+            
+            trace = prod.trace()
+            Phi += np.abs(trace)**(2*t)
+
+    Phi = Phi / (K**2)
+    return Phi
 
 def frame_potential(t, K, N, circuit_scale, circuit_maker):
     '''Calculate the t^th frame potential for a set of circuits.
@@ -54,25 +62,8 @@ def frame_potential(t, K, N, circuit_scale, circuit_maker):
     for k in range(K):
         circuit = circuit_maker(N, circuit_scale)
         circuits.append(circuit)
-    print(circuits)
-    # Next, we initialize our frame potential Phi, which is built up over the following loop
-    Phi = 0.0
-
-    # Loop over all pairs of circuits
-    for i in range(K):
-        for j in range(K):
-            # Prepare the circuit U V^\dag
-            circuit = circuits[i]+circuits[j].dagger()
-            #print("uhh")    
-            # Multiple as if circuit[0] is furthest to the right
-            prod = circuit[0]
-            for gate in circuit[1:]:
-                prod = gate.compose_with(prod)
-            
-            trace = prod.trace()
-            Phi += np.abs(trace)**(2*t)
-
-    Phi = Phi / (K**2)
+ 
+    Phi = calculation_loop(K, circuits)
     return Phi
 
 def parse_input(infile_name):
@@ -89,8 +80,6 @@ def parse_input(infile_name):
                 circuit_maker = all_clifford_maker
             elif params[4] == 'all universal':
                 circuit_maker = all_universal_maker
-            elif params[4].split(" ")[0] == 'mixed':
-                circuit_maker = mixed_maker(float(params[4].split(" ")[1]))
             else:
                 raise ValueError('Unknown circuit architecture')
             strings.append(line)
@@ -108,15 +97,9 @@ def main(args):
             outfile.write('t, K, N, circuit_scale, architecture, Phi\n')
 
     for (string, test) in zip(strings, tests):
-        t0 = time.time()
         phi = frame_potential(*test)
-        t1 = time.time()
-        #print(phi)
         with open(args.outfile, 'a') as outfile:
-            if args.time:
-                outfile.write(string + f', {phi}, {t1-t0}\n')
-            else:
-                outfile.write(string + f', {phi}\n')
+            outfile.write(string + f', {phi}\n')
 
 if __name__ == '__main__':
     args = get_args()

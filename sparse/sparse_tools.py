@@ -21,7 +21,7 @@ gate_matrices= {"H": 1.0 / 2 ** 0.5 * sparse.COO.from_numpy(np.array([[1, 1],
                                                 [1, -1]])),
                 "T": phase_gate(np.pi / 4),
                 "S": phase_gate(np.pi / 2),
-                "CNOT": sparse.tensordot(P0, np.eye(2), axes=0) +
+                "CNOT": sparse.tensordot(P0, sparse.COO.from_numpy(np.eye(2)), axes=0) +
                         sparse.tensordot(P1, pauli_X, axes=0),
                 "P0": P0,
                 "P1": P1,
