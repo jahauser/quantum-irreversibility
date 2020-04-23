@@ -34,29 +34,20 @@ class TensorGate(gate.Gate):
                 sites2.remove(site)
         td = np.tensordot(self.representation, other.representation, axes=(sums1, sums2))
         new_sites = sites1 + sites2
-        other_positions = list(range(len(other.representation.shape)))
-        for site in sums2:
-            other_positions.remove(site)
 
         base = list(range(len(td.shape)))
         base.reverse()
         transposition = []
         for i in sums1:
-            base.remove((2*self.dim-len(sums1)) + other_positions.index(index[i]))
+            base.remove(index[i]+2*self.dim-len(sums1)-len(sums2))
         for i in range(len(td.shape)):
             if i in sums1:
-                coord = (2*self.dim-len(sums1)) + other_positions.index(index[i])
+                coord = index[i]+2*self.dim-len(sums1)-len(sums2)
                 transposition.append(coord)
             else:
                 transposition.append(base.pop())
         td = np.transpose(td,transposition)
         return TensorGate(td, new_sites, self.N)
-
-    def toMatrix(self):
-        num_sites = len(self.sites)
-        transposition = [i for i in range(2*num_sites) if i % 2 == 0] + \
-                        [i for i in range(2*num_sites) if i % 2 == 1]
-        return np.transpose(self.representation, transposition).reshape(2**(num_sites), 2**(num_sites))
 
     def dagger(self):
         '''Returns the Hermitian conjugate of a gate and changes its name appropriately.'''

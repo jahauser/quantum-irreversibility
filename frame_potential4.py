@@ -1,12 +1,12 @@
 import numpy as np
 import sys, argparse
-import circuit, tools, tensor_gate_old, matrix_gate
+import circuit, tools, tensor_gate, matrix_gate
 import time
 import functools
 
 from multiprocessing import Pool
 
-gate_constructor = tensor_gate_old.TensorGate
+gate_constructor = tensor_gate.TensorGate
 #gate_constructor = matrix_gate.MatrixGate
 
 products = []
@@ -79,11 +79,11 @@ def frame_potential(t, K, N, circuit_scale, circuit_maker):
     # Next, we initialize our frame potential Phi, which is built up over the following loop
     Phi = 0.0
 
-    pairs = [(i,j) for i in range(K) for j in range(K)]
+    pairs = [(i,j) for i in range(K) for j in range(i)]
     with Pool() as p:
         partial_phis = p.map(partial_phi_pair, pairs)
     print(partial_phis)
-    Phi = sum((p**(2*t) for p in partial_phis)) / (K**2)
+    Phi = 2*sum((p**(2*t) for p in partial_phis)) / (K**2)
     return Phi
 
 def frame_potential_linear(t, K, N, circuit_scale, circuit_maker):
